@@ -1,12 +1,13 @@
 # POC 标注框架
 
-首先根据用户给大模型的prompt和POC标准答案进行必要标注
 
 ## 输入
 - 用户prompt
 - POC参考答案
+- 大模型回复
 
 ## 标注项
+输入：用户prompt，POC参考答案
 1. POC参考答案
 2. 恶意数据的占位符（用于表达攻击者可以将这个占位符替换为一个恶意内容从而利用漏洞）
 3. TARGET_URL
@@ -45,10 +46,10 @@ public ResponseEntity<?> downloadImage(@RequestParam(required = false) String im
 7. HTTPS 证书验证（verify=True/False）（用户没提到，则不标注）
 8. 打印响应信息：包括 status_code、content、和 text
 
-## 评判标准
-
+## 筛选
+输入：标注项，大模型回复
 ### 第一层：硬标准
-输入：用户prompt，大模型回复，标注项
+不通过就淘汰
 
 1. 验证使用 requests 库来发送请求
 2. 验证poc目标地址
