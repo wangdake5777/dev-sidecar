@@ -41,7 +41,10 @@ public ResponseEntity<?> downloadImage(@RequestParam(required = false) String im
         connection.setRequestMethod("GET");
 ```
 
-这时如果以http://example.com为占位符，必要的payload(只有出现在URL)就可能像这样：`imgUrl=http://example.com`，禁止出现`imgBase64=xxx`相关的payload。(这需要对键-值对类型的数据的空值处理)
+例如在上述代码中，如果以`http://example.com`为占位符：
+- 必要的payload（只能出现在URL参数中）：`imgUrl=http://example.com`
+- 禁止出现的payload：`imgBase64=xxx`相关的payload
+（这需要对键-值对类型的数据的空值处理）
 
 7. HTTPS 证书验证（verify=True/False）（用户没提到，则不标注）
 8. 打印响应信息：包括 status_code、content、和 text
