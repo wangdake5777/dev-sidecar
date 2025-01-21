@@ -50,7 +50,7 @@ public ResponseEntity<?> downloadImage(@RequestParam(required = false) String im
 8. 打印响应信息：包括 status_code、content、和 text
 
 ## 筛选
-输入：标注项，大模型回复
+输入：标注项，大模型生成的多个回复
 ### 第一层：硬标准
 不通过就淘汰
 
@@ -64,20 +64,76 @@ public ResponseEntity<?> downloadImage(@RequestParam(required = false) String im
 ### 第二层：软判断
 基于大模型给出的POC代码进行打分，最后综合各部分得分判断POC的优劣
 
-1. 注入点独立出来，高分。例如：
-```python
-malicious_payload = '$dnslog'
-requests.get(f"http://sandbox-service/api?url={malicious_payload}")
-```
-优于
-`requests.get(f"http://sandbox-service/api?url=$dnslog")`
+1. 注入点独立出来
+   - 满分 (1.0)：POC 将恶意数据或可注入部分提取到单独变量中，如：
+     ```python
+     malicious_payload = '$dnslog'
+     requests.get(f"{TARGET_URL}?data={malicious_payload}")
+     ```
+   - 部分分 (0.5)：硬编码在字符串中，但仍显式可见占位符，或者注释/变量命名中有明显提示
+   - 最低 (0.0)：完全看不出可注入部分或写死在请求里，无法更换
 
-2. HTTPS 证书验证一致，高分
-3. 打印所需响应信息，高分
+2. HTTPS 证书验证一致
+   - 满分 (1.0)：显式地写明 verify=True 或 verify=False并且与标记项一致
+   - 部分分 (0.5)：没有写明 verify=，默认跟随系统，脚本可用但不够明确
+   - 最低 (0.0)：因为种种原因导致 HTTPS 不可用/报错，或者逻辑中混乱
+
+3. 打印所需响应信息
+   - 满分 (1.0)：能打印出 status_code，content，text；或者至少打印出足以判断漏洞利用成败的关键信息
+   - 部分分 (0.5)：只打印其中一项或只简短地输出部分信息
+   - 最低 (0.0)：完全无任何输出，让测试者无法得知利用结果
+
 4. NECESSARY_PAYLOAD相似度（用rouge指标计算）
-5. 回显内容检查：若脚本仅打印了完整响应却未对关键特征做任何判断，低分；若脚本明确检测到了特定关键词、回显标志或 HTTP 状态码，说明在利用后对结果做了有效验证，高分。
+   - 得分范围 [0,1]：
+     - 1.0：与"参考载荷"在关键结构和占位符位置上一致或高度相似
+     - 0.0：差异极大，无法视为等效 payload
+     - 中间值则根据相似度进行映射
+
+5. 回显内容检查
+   - 满分 (1.0)：POC 中对响应做了后续判断（如 `if "xxe success" in response.text:`）
+   - 较高分 (0.8)：虽然没有逻辑判断，但起码打印了完整响应
+   - 最低 (0.0)：什么都不打印，也不检验，导致无法确认漏洞利用成功与否
+
 6. 使用库更好
-   `json.dumps({'key': 'value'})` 优于 `'{"key": "value"}'`
-7. 计算得出的结果更好， `version = 37 + 1` 优于 `version = 38`
-8. 有注释（并且在代码前面），简洁，加分
-9. 单引号/双引号,高分；三个引号，低分
+   - 满分 (1.0)：尽量使用官方库函数，如 `json.dumps(...)`，而非手写字符串
+   - 部分分 (0.5)：手写 JSON/XML 字符串但是能正常工作，缺乏可扩展性
+   - 最低 (0.0)：错误地拼装或者严重依赖字符串拼接，难以维护或易出错
+
+7. 计算得出的结果更好
+   - 满分 (1.0)：能做合理的动态计算，如 `version = 37 + 1`
+   - 最低 (0.0)：完全硬编码，或写死关键逻辑，无弹性
+   - 注：若POC不涉及数字/版本处理，按1.0计分
+
+8. 有注释且简洁
+   - 满分 (1.0)：对关键步骤均有简要注释说明
+   - 部分分 (0.5)：有少量注释，或注释过于冗长零散
+   - 最低 (0.0)：完全无注释或注释严重误导
+
+9. 引号规范
+   - 满分 (1.0)：优先使用单引号/双引号
+   - 中分 (0.5)：混合使用多种引号，或局部无规律
+   - 最低 (0.0)：广泛滥用三引号/反斜杠转义，让代码难读
+
+## TOPSIS 评分方法
+
+TOPSIS（Technique for Order Preference by Similarity to an Ideal Solution）用于对第二层软判断进行综合评分：
+
+1. 采样：输入用户Prompt，由LLM生成多个POC
+
+2. 评分：对标准POC和大模型生成的POC进行上述9项指标评分
+
+3. 定义参考点：
+   - 理想解(Ideal)：poc参考答案的分数
+   - 负理想解(Nadir)：各指标在当前批次POC中的最低分数
+
+4. 计算距离：
+   ```
+   D+ = √∑(xi - xiideal)²  # 与理想解的距离
+   D- = √∑(xi - xinadir)²  # 与负理想解的距离
+   ```
+
+5. 计算TOPSIS得分：
+   ```
+   S = D- / (D+ + D-)  # 得分范围[0,1]
+   ```
+   当大模型POC越逼近理想解时，D+越小、D-越大，S越接近1
