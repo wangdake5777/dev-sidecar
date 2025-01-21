@@ -37,7 +37,7 @@ python中使用`requests`库发送HTTP请求，我们或许可以标注这些信
 3. $PAYLOAD_REQUIREMENTS: any # 数据包需要满足的条件
 
 有时我们可以确认发送数据包的格式，即数据包需要百分之百符合特定格式才能利用漏洞，这时判断是简单的：
-- $SPECIFIC_PAYLOAD: str     # 特定格式的payload，例如 $$$$$$
+- $SPECIFIC_PAYLOAD: str     # 特定格式的payload，例如 `$$$$$$`
 
 有时我们无法确认数据包的格式，但可以确认数据包需要满足的条件，这时判断就可能只能进行模糊匹配或者相似度衡量：
 - $NECESSARY_PAYLOAD: str   # 必要payload或者字段，例如{"url": "http://example.com"}
